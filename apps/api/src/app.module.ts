@@ -16,6 +16,9 @@ import { ManagementModule } from './management/management.module';
         HOST: Joi.string().trim().min(1).default('127.0.0.1'),
         PORT: Joi.number().port().default(3000),
         DATABASE_POOL_MAX: Joi.number().integer().min(1).max(100).default(10),
+        PAYSTACK_WEBHOOK_SECRET: Joi.string().pattern(/^whsec_/).allow('').optional(),
+        PAYSTACK_SECRET_KEY: Joi.string().pattern(/^sk_(test|live)_/).allow('').optional(),
+        PAYSTACK_CALLBACK_URL: Joi.string().uri({ scheme: ['http', 'https'] }).allow('').optional(),
         DATABASE_URL: Joi.string()
           .uri({ scheme: ['postgres', 'postgresql'] })
           .required(),

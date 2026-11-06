@@ -20,7 +20,12 @@
     "db:validate": "npm run prisma:validate --workspace @netbridge/api",
     "db:migrate": "npm run db:migrate --workspace @netbridge/api",
     "db:deploy": "npm run db:deploy --workspace @netbridge/api",
-    "db:studio": "npm run db:studio --workspace @netbridge/api"
+    "db:studio": "npm run db:studio --workspace @netbridge/api",
+    "app:dev": "npm run build && node apps/api/scripts/run-local.cjs",
+    "gateway:pair": "node apps/gateway-agent/agent.mjs pair",
+    "gateway:start": "node apps/gateway-agent/agent.mjs start",
+    "gateway:status": "node apps/gateway-agent/agent.mjs status",
+    "gateway:test": "node --test apps/gateway-agent/agent.test.mjs"
   },
   "devDependencies": {
     "@nestjs/platform-express": "^12.3.3",

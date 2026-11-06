@@ -35,6 +35,9 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+      PAYSTACK_CALLBACK_URL: ${PAYSTACK_CALLBACK_URL:-}
+      PAYSTACK_WEBHOOK_SECRET: ${PAYSTACK_WEBHOOK_SECRET:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-netbridge}:${POSTGRES_PASSWORD:-local_dev_password}@postgres:5432/${POSTGRES_DB:-netbridge}?schema=public
     ports:
       - "127.0.0.1:${PORT:-3000}:3000"

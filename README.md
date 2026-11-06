@@ -53,7 +53,7 @@ instances default to ten connections; set `DATABASE_POOL_MAX` (1–100) to tune 
 for your deployment.
 
 Connection records track management state. They do not establish tunnels or
-prove traffic is flowing. Android/Linux tunnel clients, relay infrastructure,
+prove traffic is flowing. Native Android/Linux tunnel clients, first-party relay infrastructure,
 payments, email verification, and password recovery are outside this MVP.
 Validate a real Android-to-Linux connection before committing to a relay design.
 
@@ -160,3 +160,26 @@ Lists use cursor pagination (default 50, maximum 100). Revoked resources and end
 records remain available for history. Establish database backups and retention.
 Periodically remove expired authentication sessions; login also removes the
 account's expired sessions.
+
+## Installable app: local trial
+
+Run `npm run app:dev` to build the API and start the full app with embedded
+PostgreSQL, without Docker. Open http://127.0.0.1:5173 in Edge or Chrome and use
+**Install NetBridge** when offered, or the browser menu's app installation action.
+The app opens in its own window. Stop the local stack with Ctrl+C.
+This local trial stores its database in `.local/postgres`, separate from the
+configured PostgreSQL database and automated test output. Create a new account
+when using this database for the first time. Names and contact details persist
+between restarts. Keep the local stack running while using the installed app.
+
+The interface can reopen offline; account actions and network management need
+the API online. API responses and account data are never cached by the service
+worker. Phone installation requires a reachable HTTPS deployment; localhost on
+your phone refers to the phone itself. This trial adds an installable management
+app; it does not add VPN tunneling or a native Android tunnel client.
+
+## Home PC gateway and Windows remote access
+
+See [Windows home-network trial](docs/windows-connection.md) for gateway agent pairing,
+Tailscale exit-node setup, remote connection, verification, and disconnect steps.
+The gateway agent is included; Tailscale supplies the VPN separately.

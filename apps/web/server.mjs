@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
 export function createWebServer({ apiUrl = process.env.API_URL ?? 'http://127.0.0.1:3000', root = resolve(directory, 'public') } = {}) {
   const upstream = new URL(apiUrl);

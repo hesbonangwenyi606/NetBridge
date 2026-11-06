@@ -107,15 +107,26 @@ test('owner can register, pair a gateway, approve a device, manage sessions, and
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Workspace overview' })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('API available', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Add gateway', exact: true }).click();
+  await expect(page.locator('.plan-card')).toHaveCount(3);
+  await page.getByRole('link', { name: 'Gateways', exact: true }).click();
+  await page.locator('.heading-actions').getByRole('button', { name: 'Add gateway', exact: true }).click();
   await page.getByLabel('Gateway name').fill('Home <office>');
   await page.getByRole('dialog').getByRole('button', { name: 'Add gateway', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Pair your gateway' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose gateway', exact: true }).click();
+  await page.getByLabel('Gateway', { exact: true }).selectOption({label:'Home <office> (Needs pairing)'});
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pair your gateway', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Done, check status' }).click();
+  await expect(page.locator('#pairing-status')).toContainText(/waiting/i);
+  await expect(page.getByRole('heading', { name: 'Gateway paired successfully', exact: true })).toHaveCount(0);
   const token = await page.getByLabel('Pairing token', { exact: true }).inputValue();
   expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
   const paired = await request.post(`${base}/v1/gateway-agent/pair`, { data: { pairingToken: token } });
   expect(paired.status()).toBe(200);
-  await page.getByRole('button', { name: 'Done, check status' }).click();
+  await expect(page.getByRole('heading', { name: 'Gateway paired successfully', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View gateway', exact: true }).click();
   await expect(page.getByText('Home <office>', { exact: true })).toBeVisible();
   await expect(page.locator('.gateway-card .badge')).toHaveText('Paired');
 

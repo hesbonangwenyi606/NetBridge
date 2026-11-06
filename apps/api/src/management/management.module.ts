@@ -1,3 +1,5 @@
+import { BillingController } from '../billing/billing.controller';
+import { BillingService } from '../billing/billing.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthService } from './auth.service';
@@ -8,7 +10,7 @@ import { RateLimitGuard } from './rate-limit.guard';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [AuthController, DashboardController, GatewaysController, GatewayAgentController, DevicesController, ConnectionsController],
-  providers: [AuthService, AuthGuard, ManagementService, RateLimitGuard],
+  controllers: [BillingController, AuthController, DashboardController, GatewaysController, GatewayAgentController, DevicesController, ConnectionsController],
+  providers: [BillingService, AuthService, AuthGuard, ManagementService, RateLimitGuard],
 })
 export class ManagementModule {}

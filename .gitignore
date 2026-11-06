@@ -11,3 +11,5 @@ npm-debug.log*
 apps/api/generated/
 
 /generated/prisma
+
+.local/

@@ -22,7 +22,7 @@ test('workspace fits a phone viewport and navigation remains accessible', async 
         : { items: records[path] ?? [], nextCursor: null };
       await route.fulfill({ json: body });
     });
-    await page.goto(`http://127.0.0.1:${web.address().port}`);
+    await page.goto(`http://127.0.0.1:${web.address().port}/#overview`);
     await expect(page.getByRole('heading', { name: 'Workspace overview' })).toBeVisible();
     await expect(page.locator('.loading-block')).toHaveCount(0);
     const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,

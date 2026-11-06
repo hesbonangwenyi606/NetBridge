@@ -121,3 +121,47 @@ invalid/conflicting lifecycle transition. 429: public authentication/pairing
 rate limit. Readiness returns 503 for database failures. Unexpected database
 errors use the framework's generic 500 response without returning credentials
 or SQL details.
+
+## Paystack subscription checkout
+
+Prices are fixed on the server: 24 hours KSh 25, 7 days KSh 120, and 30 days KSh 700.
+These are one-time duration purchases, without automatic renewal. Store private
+Paystack credentials in `.env`, never in frontend code or Git:
+
+```dotenv
+PAYSTACK_SECRET_KEY=your_private_test_key
+PAYSTACK_CALLBACK_URL=http://127.0.0.1:5173/
+```
+
+Use a real `sk_test_...` key privately, then restart `npm run app:dev` so the
+payment migration is applied. Use a reachable HTTPS callback for shared deployment.
+A Kenya Paystack account with the required KES channels enabled is needed for M-Pesa
+and cards. Payment details are collected on Paystack's hosted checkout.
+
+Configure a public HTTPS webhook URL in Paystack:
+`https://YOUR_HOST/v1/billing/webhook`. If the web app proxies the API, the same
+origin works. Localhost and a private Tailscale-only URL cannot receive Paystack
+webhooks. The handler verifies the raw-body signature, then independently verifies
+the transaction with Paystack before activation. If your Paystack account uses the
+new `Paystack-Signature` header, also set `PAYSTACK_WEBHOOK_SECRET=whsec_...` privately;
+otherwise legacy `x-paystack-signature` uses the API secret. Use test-mode secrets
+with test-mode events. Never commit either secret.
+
+After checkout returns, the signed-in browser asks the server to verify the payment.
+Pending payments do not open gateway setup. Only successful payments with the exact
+reference, account, KES amount, and currency open the gateway selector. Choosing a
+pending gateway generates a fresh single-use token. Paste it into the home-PC agent;
+the screen automatically confirms pairing. Internet traffic still requires the
+separately configured Tailscale tunnel. NetBridge payment and device records do not
+enforce Tailscale network permissions or automatically disconnect it at expiry.
+
+`POST /v1/billing/checkout` takes `{plan: daily|weekly|monthly, channel: mpesa|card}`.
+`POST /v1/billing/payments/:reference/verify` verifies an account-owned purchase.
+Repeat verification does not extend the paid duration, which starts at Paystack's
+confirmed payment time. If the browser loses its saved reference, use the payment
+reference from your merchant records to recover the payment through the verification
+endpoint. Configure public HTTPS hosting and test the full provider callback/webhook
+flow before accepting live payments. No live payments were taken during local tests.
+
+Provider references: https://paystack.com/docs/api/transaction/ and
+https://paystack.com/docs/payments/webhooks/.

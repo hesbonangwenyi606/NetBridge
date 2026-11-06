@@ -28,9 +28,16 @@ const badge = (status) => `<span class="badge ${escape(status.toLowerCase())}"><
 const app = document.querySelector('#app');
 const modal = document.querySelector('#modal');
 const state = { user: null, token: sessionStorage.getItem('netbridge.session'), page: 'overview', authMode: 'login', filter: 'ALL', search: '', loading: true, busy: false, error: '', summary: null, gateways: [], devices: [], connections: [], cursors: {}, health: null, updatedAt: null };
-const pages = { overview: 'Overview', gateways: 'Gateways', devices: 'Devices', connections: 'Connections' };
+const pages = { overview: 'Overview', gateways: 'Gateways', devices: 'Devices', connections: 'Connections', subscription: 'Subscription' };
 let refreshTimer;
 let modalReturnFocus;
+let pairingWatch;
+let pairingCheck;
+let pairingTarget;
+let paymentWatch;
+let paymentChecks = 0;
+let verifyingPayment = false;
+let billingEnabled = false;
 let loadVersion = 0;
 
 function toast(message, error = false) {
@@ -75,6 +82,8 @@ function resetSession() {
   state.gateways = []; state.devices = []; state.connections = [];
   state.cursors = {}; state.error = ''; state.loading = false;
   clearInterval(refreshTimer);
+  clearTimeout(paymentWatch);
+  sessionStorage.removeItem('netbridge.payment');
   document.querySelector('#toasts').replaceChildren();
   if (modal.open) modal.close();
 }
@@ -125,18 +134,32 @@ function render() {
   const selection = searchFocused ? active.selectionStart : null;
   if (!state.user) { app.innerHTML = renderAuth(); return; }
   const userName = [state.user.firstName, state.user.lastName].filter(Boolean).join(' ') || state.user.email.split('@')[0];
-  app.innerHTML = `<div class="app-layout"><aside class="sidebar" id="sidebar"><a href="#overview" class="brand">${brand()}</a><div class="workspace-label">PERSONAL WORKSPACE</div><nav aria-label="Main navigation">${Object.entries(pages).map(([key, label]) => `<a href="#${key}" class="nav-item ${state.page === key ? 'selected' : ''}" ${state.page === key ? 'aria-current="page"' : ''}>${icon({ overview: 'grid', gateways: 'gateway', devices: 'device', connections: 'link' }[key])}<span>${label}</span>${key === 'devices' && state.summary?.pendingDevices ? `<span class="nav-count">${state.summary.pendingDevices}</span>` : ''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="help-card"><span class="help-symbol">${icon('globe')}</span><h3>A bridge to your network</h3><p>Your first gateway is a great place to start.</p><button class="text-button" data-action="guide">See how it works ${icon('arrow')}</button></div><button class="help-link" data-action="guide">${icon('help')} Getting started ${icon('chevron')}</button><div class="account-card"><div class="avatar">${escape(userName.slice(0, 2).toUpperCase())}</div><div class="account-text"><strong>${escape(userName)}</strong><span title="${escape(state.user.email)}">${escape(state.user.email)}</span></div><button class="icon-button" data-action="logout" aria-label="Sign out" title="Sign out">${icon('logout')}</button></div></div></aside><div class="main-layout"><header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="Toggle navigation">${icon('menu')}</button><span>Workspace</span>${icon('chevron')}<strong>${pages[state.page]}</strong></div><div class="topbar-actions">${healthBadge()}<span class="topbar-divider"></span><span class="small-avatar">${escape(userName.charAt(0).toUpperCase())}</span></div></header><main id="main" class="content" tabindex="-1"><div class="page-heading"><div><div class="eyebrow">YOUR NETWORK, WITHIN REACH</div><h1>${state.page === 'overview' ? 'Workspace overview' : pages[state.page]}</h1><p class="muted">${{ overview: 'A little clarity for everything connected to you.', gateways: 'Your home and office gateways, all in one place.', devices: 'Choose which devices belong on your network.', connections: 'A clear record of your device and gateway sessions.' }[state.page]}</p></div><div class="heading-actions"><button class="button secondary refresh-button" data-action="refresh" ${state.loading ? 'disabled' : ''}>${icon('refresh')}<span>Refresh</span></button><button class="button primary" data-action="${state.page === 'devices' ? 'add-device' : state.page === 'connections' ? 'add-connection' : 'add-gateway'}">${icon('plus')}${state.page === 'devices' ? 'Add device' : state.page === 'connections' ? 'New session' : 'Add gateway'}</button></div></div>${state.error ? `<div class="error-banner" role="alert"><span>${escape(state.error)}</span><button class="text-button" data-action="refresh">Try again</button></div>` : ''}${state.loading && !state.summary ? skeleton() : state.page === 'overview' ? overview() : resourcePage()}<footer class="content-footer"><span>${icon('shield')} Your workspace. Your approval.</span><span>${state.updatedAt ? `Updated ${state.updatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : 'Awaiting first sync'}</span></footer></main></div></div>`;
+  app.innerHTML = `<div class="app-layout"><aside class="sidebar" id="sidebar"><a href="#overview" class="brand">${brand()}</a><div class="workspace-label">PERSONAL WORKSPACE</div><nav aria-label="Main navigation">${Object.entries(pages).map(([key, label]) => `<a href="#${key}" class="nav-item ${state.page === key ? 'selected' : ''}" ${state.page === key ? 'aria-current="page"' : ''}>${icon({ overview: 'grid', gateways: 'gateway', devices: 'device', connections: 'link', subscription: 'shield' }[key])}<span>${label}</span>${key === 'devices' && state.summary?.pendingDevices ? `<span class="nav-count">${state.summary.pendingDevices}</span>` : ''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="help-card"><span class="help-symbol">${icon('globe')}</span><h3>A bridge to your network</h3><p>Your first gateway is a great place to start.</p><button class="text-button" data-action="guide">See how it works ${icon('arrow')}</button></div><button class="help-link" data-action="guide">${icon('help')} Getting started ${icon('chevron')}</button><div class="account-card"><div class="avatar">${escape(userName.slice(0, 2).toUpperCase())}</div><div class="account-text"><strong>${escape(userName)}</strong><span title="${escape(state.user.email)}">${escape(state.user.email)}</span></div><button class="icon-button" data-action="logout" aria-label="Sign out" title="Sign out">${icon('logout')}</button></div></div></aside><div class="main-layout"><header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="Toggle navigation">${icon('menu')}</button><span>Workspace</span>${icon('chevron')}<strong>${pages[state.page]}</strong></div><div class="topbar-actions">${healthBadge()}<span class="topbar-divider"></span><span class="small-avatar">${escape(userName.charAt(0).toUpperCase())}</span></div></header><main id="main" class="content" tabindex="-1"><div class="page-heading"><div><div class="eyebrow">YOUR NETWORK, WITHIN REACH</div><h1>${state.page === 'overview' ? 'Workspace overview' : pages[state.page]}</h1><p class="muted">${{ overview: 'A little clarity for everything connected to you.', gateways: 'Your home and office gateways, all in one place.', devices: 'Choose which devices belong on your network.', connections: 'A clear record of your device and gateway sessions.', subscription: 'One subscription for your connected life.' }[state.page]}</p></div><div class="heading-actions" ${['overview', 'subscription'].includes(state.page) ? 'hidden' : ''}><button class="button secondary refresh-button" data-action="refresh" ${state.loading ? 'disabled' : ''}>${icon('refresh')}<span>Refresh</span></button><button class="button primary" data-action="${state.page === 'devices' ? 'add-device' : state.page === 'connections' ? 'add-connection' : 'add-gateway'}">${icon('plus')}${state.page === 'devices' ? 'Add device' : state.page === 'connections' ? 'New session' : 'Add gateway'}</button></div></div>${state.error ? `<div class="error-banner" role="alert"><span>${escape(state.error)}</span><button class="text-button" data-action="refresh">Try again</button></div>` : ''}${state.page === 'subscription' ? subscriptionPage() : state.page === 'overview' ? overview() : state.loading && !state.summary ? skeleton() : resourcePage()}<footer class="content-footer"><span>${icon('shield')} Your workspace. Your approval.</span><span>${state.updatedAt ? `Updated ${state.updatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}` : 'Awaiting first sync'}</span></footer></main>${mobileNavigation()}</div></div>`;
   if (searchFocused) { const field = document.querySelector('#resource-search'); field?.focus(); field?.setSelectionRange(selection, selection); }
 }
 
 function overview() {
-  const stats = state.summary ?? { pairedGateways: '—', approvedDevices: '—', activeConnections: '—', pendingDevices: '—' };
-  return `<section class="welcome-panel"><div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h2>One place.<br>All your network.</h2><p>Bring your gateways and trusted devices<br class="desktop-only"> together in a workspace that’s yours.</p><button class="button dark" data-action="guide">Explore your workspace ${icon('arrow')}</button></div><div class="welcome-art" aria-hidden="true"><div class="welcome-orbit orbit-one"></div><div class="welcome-orbit orbit-two"></div><div class="welcome-orbit orbit-three"></div><div class="welcome-center">${icon('gateway')}</div><div class="welcome-device">${icon('device')}<span class="little-check">${icon('check')}</span></div><div class="welcome-shield">${icon('shield')}</div><span class="art-label">YOUR OWN LITTLE NETWORK</span></div><span class="welcome-corner">NETBRIDGE / WORKSPACE</span></section><section class="stats-grid" aria-label="Network overview">${[
-    ['gateway', 'Paired gateways', stats.pairedGateways, 'Ready for approved devices', 'gateways'],
-    ['device', 'Approved devices', stats.approvedDevices, 'Devices you’ve welcomed in', 'devices'],
-    ['link', 'Open sessions', stats.activeConnections, 'Connection records in progress', 'connections'],
-    ['clock', 'Pending approval', stats.pendingDevices, 'Waiting for your review', 'devices'],
-  ].map(([i, label, count, description, page]) => `<a class="stat-card" href="#${page}"><div class="stat-top"><span class="stat-icon ${i === 'clock' ? 'amber' : ''}">${icon(i)}</span>${icon('chevron')}</div><strong class="stat-number">${count}</strong><h3>${label}</h3><p>${description}</p></a>`).join('')}</section><section class="section"><div class="section-heading"><div><h2>Your gateways <span class="count-pill">${state.gateways.length}${state.cursors.gateways ? '+' : ''}</span></h2><p class="muted">A familiar place for every connection.</p></div><a href="#gateways" class="text-link">View all gateways ${icon('arrow')}</a></div>${state.gateways.length ? `<div class="gateway-grid">${state.gateways.slice(0, 3).map(gatewayCard).join('')}</div>` : empty('gateway', 'Your network starts here', 'Add your first home or office gateway, then pair it with your gateway agent.', 'Add your first gateway', 'add-gateway')}</section><section class="section activity-section"><div class="section-heading"><div><h2>Recent sessions</h2><p class="muted">The latest entries in your connection history.</p></div><a href="#connections" class="text-link">View history ${icon('arrow')}</a></div>${connectionsTable(state.connections.slice(0, 5))}</section><div class="scope-note">${icon('help')} Connection sessions are management records. Creating one does not start a traffic tunnel.</div>`;
+  return subscriptionPage();
+}
+
+function mobileNavigation() {
+  return `<nav class="bottom-nav" aria-label="Phone navigation">${[
+    ['overview', 'grid', 'Home'], ['gateways', 'gateway', 'Network'],
+    ['devices', 'device', 'My devices'], ['connections', 'link', 'History'], ['subscription', 'shield', 'My plan'],
+  ].map(([key, image, title]) => `<a href="#${key}" ${state.page === key ? 'aria-current="page"' : ''}>${icon(image)}<span>${title}</span></a>`).join('')}</nav>`;
+}
+
+const subscriptionPlans = [
+  { id: 'daily', name: '24 hours', price: 25, tagline: 'A day of connection.', icon: 'clock', features: ['Valid for 24 hours', 'One subscription for your account', 'Gateway and device management'] },
+  { id: 'weekly', name: '7 days', price: 120, tagline: 'Your week, connected.', icon: 'shield', features: ['Valid for 7 days', 'One subscription for your account', 'Gateway and device management'] },
+  { id: 'monthly', name: '30 days', price: 700, tagline: 'A month closer to home.', icon: 'gateway', features: ['Valid for 30 days', 'One subscription for your account', 'Gateway and device management'] },
+];
+function subscriptionPage() {
+  return `<section class="subscription-hero"><div class="subscription-symbol">${icon('shield')}</div><span class="eyebrow">MADE FOR YOUR EVERYDAY</span><h2>Home, wherever<br><em>you go.</em></h2><p>Choose the duration that works for you.</p><span class="preview-label">${billingEnabled ? 'Choose your subscription' : 'Subscription preview - Not yet available'}</span></section><div class="billing-notice">${icon('help')} ${billingEnabled ? 'Choose a duration, pay securely with Paystack, then select your gateway.' : 'Choose 24 hours, 7 days, or 30 days. Connect Paystack to enable M-Pesa and card checkout.'}</div><section class="plans-grid" aria-label="Subscription">${subscriptionPlans.map(plan => `<article class="plan-card single-plan"><div class="plan-card-top"><span class="plan-icon">${icon(plan.icon)}</span><span class="plan-category">YOUR SUBSCRIPTION</span></div><h3>${plan.name}</h3><p>${plan.tagline}</p><div class="plan-price">KSh ${plan.price.toLocaleString('en-KE')}<span>for ${plan.name} &middot; one-time payment</span></div><ul>${plan.features.map(feature => `<li>${icon('check')}${feature}</li>`).join('')}</ul><button class="button primary full" data-action="plan-details" data-plan="${plan.id}">Choose ${plan.name} ${icon('arrow')}</button></article>`).join('')}</section><div class="payment-accepted"><span>PAYMENT OPTIONS</span><strong><span class="mpesa-dot"></span> M-Pesa</strong><strong>${icon('grid')} Debit / credit card</strong></div><section class="plan-assurance"><span>${icon('shield')} ${billingEnabled ? 'Secure Paystack checkout' : 'No payment collected'}</span><span>${icon('check')} No automatic renewal</span></section><div class="subscription-help"><h3>Your questions, answered.</h3><details><summary>Can I subscribe today?</summary><p>${billingEnabled ? 'Yes. Choose a duration and complete payment on Paystack.' : 'Checkout is not configured yet.'} Choose 24 hours for KSh 25, 7 days for KSh 120, or 30 days for KSh 700. M-Pesa and card payments use Paystack.</p></details><details><summary>Does a plan provide internet on its own?</summary><p>No. Your phone and home gateway both need an internet connection. Remote traffic currently uses a separately configured Tailscale connection.</p></details><details><summary>Will exploring the subscription change my account?</summary><p>No. Exploring the subscription does not activate billing or change your device access.</p></details></div>`;
+}
+
+function showPlanCheckout(plan) {
+  openModal('NetBridge subscription', 'Choose how you would like to pay.', `<div class="checkout-summary"><span class="plan-icon">${icon(plan.icon)}</span><div><strong>NetBridge &middot; ${plan.name}</strong><span>KSh ${plan.price.toLocaleString('en-KE')} &middot; one-time payment</span></div><span class="preview-label">${billingEnabled ? 'Paystack' : 'Preview'}</span></div><fieldset class="payment-methods"><legend>Payment method</legend><label class="payment-option"><input type="radio" name="paymentMethod" value="mpesa" checked><span class="payment-logo mpesa-logo">M</span><span><strong>M-Pesa</strong><small>Pay with your mobile wallet</small></span>${icon('check')}</label><label class="payment-option"><input type="radio" name="paymentMethod" value="card"><span class="payment-logo card-logo">${icon('grid')}</span><span><strong>Debit / credit card</strong><small>Pay through secure checkout</small></span>${icon('check')}</label></fieldset><div id="mpesa-payment" ${billingEnabled ? 'hidden' : ''}><label class="checkout-phone">M-Pesa phone number<input type="tel" name="paymentPhone" autocomplete="tel" inputmode="tel" placeholder="e.g. 0712 345 678" maxlength="20" aria-describedby="mpesa-help"></label><p id="mpesa-help" class="payment-help">When payments open, you will confirm on your phone. Never enter your M-Pesa PIN here.</p></div><div id="card-payment" hidden><div class="secure-card-note">${icon('shield')}<p>Card details are entered on Paystack's secure checkout. NetBridge will not collect your card number or CVV.</p></div></div><div class="checkout-unavailable" role="note"><strong>${billingEnabled ? 'Complete payment securely' : 'Checkout is not open yet'}</strong><p>${billingEnabled ? 'Paystack collects your payment details. We confirm payment before opening gateway setup.' : 'Connect Paystack before checkout can open. No subscription has been activated and no payment has been taken.'}</p></div><button class="button primary full" data-action="pay-subscription" data-plan="${plan.id}" ${billingEnabled ? '' : 'disabled'}>${billingEnabled ? 'Continue to Paystack' : 'Payments coming soon'}</button><div class="modal-footer"><button class="button secondary" data-action="close-modal">Back to subscription</button></div>`);
 }
 
 function gatewayCard(gateway) {
@@ -151,22 +174,25 @@ function resourcePage() {
   const kind = state.page;
   const items = state[kind].filter((item) => (state.filter === 'ALL' || item.status === state.filter) && `${item.name ?? ''} ${item.id} ${item.platform ?? ''} ${nameFor('gateways', item.gatewayId)} ${nameFor('devices', item.deviceId)}`.toLowerCase().includes(state.search.toLowerCase()));
   const filters = kind === 'gateways' ? ['ALL', 'PENDING', 'PAIRED', 'REVOKED'] : kind === 'devices' ? ['ALL', 'PENDING', 'APPROVED', 'REVOKED'] : ['ALL', 'ACTIVE', 'ENDED'];
-  return `<section class="resource-section"><div class="resource-toolbar"><div class="filter-tabs" role="group" aria-label="Filter by status">${filters.map((filter) => `<button class="filter-tab ${state.filter === filter ? 'active' : ''}" data-action="filter" data-filter="${filter}" aria-pressed="${state.filter === filter}">${filter === 'ALL' ? 'All ' + kind : statusLabel[filter]}</button>`).join('')}</div><label class="search-field">${icon('search')}<input id="resource-search" type="search" placeholder="Search ${kind}…" aria-label="Search ${kind}" value="${escape(state.search)}"></label></div>${kind === 'gateways' ? (items.length ? `<div class="gateway-grid">${items.map(gatewayCard).join('')}</div>` : empty('gateway', state.gateways.length ? 'No gateways match' : 'A home for your network', state.gateways.length ? 'Try another search or status filter.' : 'Add a gateway to get your private workspace started.', state.gateways.length ? '' : 'Add gateway', 'add-gateway')) : kind === 'devices' ? devicesTable(items) : connectionsTable(items)}${state.cursors[kind] ? '<div class="pagination"><span>More records are available. Search and filters apply to loaded records.</span><button class="button secondary" data-action="load-more">Load more</button></div>' : ''}</section>${kind === 'connections' ? '<div class="scope-note">' + icon('help') + ' Sessions track connection intent and history. They don’t establish network tunnels.</div>' : ''}`;
+  return `<section class="resource-section">${kind === 'gateways' ? '<div class="gateway-setup-entry"><div><strong>Set up your home connection</strong><p>Choose a gateway and generate its pairing token.</p></div><button class="button primary" data-action="choose-gateway">Choose gateway</button></div>' : ''}<div class="resource-toolbar"><div class="filter-tabs" role="group" aria-label="Filter by status">${filters.map((filter) => `<button class="filter-tab ${state.filter === filter ? 'active' : ''}" data-action="filter" data-filter="${filter}" aria-pressed="${state.filter === filter}">${filter === 'ALL' ? 'All ' + kind : statusLabel[filter]}</button>`).join('')}</div><label class="search-field">${icon('search')}<input id="resource-search" type="search" placeholder="Search ${kind}…" aria-label="Search ${kind}" value="${escape(state.search)}"></label></div>${kind === 'gateways' ? (items.length ? `<div class="gateway-grid">${items.map(gatewayCard).join('')}</div>` : empty('gateway', state.gateways.length ? 'No gateways match' : 'A home for your network', state.gateways.length ? 'Try another search or status filter.' : 'Add a gateway to get your private workspace started.', state.gateways.length ? '' : 'Add gateway', 'add-gateway')) : kind === 'devices' ? devicesTable(items) : connectionsTable(items)}${state.cursors[kind] ? '<div class="pagination"><span>More records are available. Search and filters apply to loaded records.</span><button class="button secondary" data-action="load-more">Load more</button></div>' : ''}</section>${kind === 'connections' ? '<div class="scope-note">' + icon('help') + ' Sessions track connection intent and history. They don’t establish network tunnels.</div>' : ''}`;
 }
 
 function nameFor(kind, id) { return state[kind].find((item) => item.id === id)?.name ?? (id ? `…${id.slice(-8)}` : ''); }
 
 function devicesTable(devices) {
   if (!devices.length) return empty('device', state.devices.length ? 'No devices match' : 'Make room for your devices', state.devices.length ? 'Try another search or status filter.' : 'Register a phone or computer, then approve it when you’re ready.', state.devices.length ? '' : 'Add your first device', 'add-device');
-  return `<div class="table-scroll"><table><thead><tr><th>Device</th><th>Platform</th><th>Status</th><th>Added</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${devices.map((device) => `<tr><td><div class="table-name"><span class="table-icon">${icon('device')}</span><span><strong>${escape(device.name)}</strong><small>${device.id.slice(0, 8)}</small></span></div></td><td><span class="platform-label">${escape(device.platform)}</span></td><td>${badge(device.status)}</td><td class="date-cell">${date(device.createdAt)}</td><td><div class="row-actions">${device.status === 'PENDING' ? `<button class="button small primary" data-action="approve-device" data-id="${device.id}">${icon('check')} Approve</button>` : ''}${device.status !== 'REVOKED' ? `<button class="button small subtle-danger" data-action="revoke-device" data-id="${device.id}">Revoke</button>` : '<span class="muted">—</span>'}</div></td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll"><table class="phone-records device-records"><thead><tr><th>Device</th><th>Platform</th><th>Status</th><th>Added</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${devices.map((device) => `<tr><td><div class="table-name"><span class="table-icon">${icon('device')}</span><span><strong>${escape(device.name)}</strong><small>${device.id.slice(0, 8)}</small></span></div></td><td><span class="platform-label">${escape(device.platform)}</span></td><td>${badge(device.status)}</td><td class="date-cell">${date(device.createdAt)}</td><td><div class="row-actions">${device.status === 'PENDING' ? `<button class="button small primary" data-action="approve-device" data-id="${device.id}">${icon('check')} Approve</button>` : ''}${device.status !== 'REVOKED' ? `<button class="button small subtle-danger" data-action="revoke-device" data-id="${device.id}">Revoke</button>` : '<span class="muted">—</span>'}</div></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function connectionsTable(connections) {
   if (!connections.length) return empty('link', state.page === 'connections' && state.connections.length ? 'No sessions match' : 'A fresh start', state.connections.length ? 'Try another search or status filter.' : 'Your connection history will appear here. Pair a gateway and approve a device to record your first session.', '', '');
-  return `<div class="table-scroll"><table><thead><tr><th>Device &amp; gateway</th><th>Status</th><th>Started</th><th>Ended</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${connections.map((connection) => `<tr><td><div class="table-name"><span class="table-icon">${icon('link')}</span><span><strong>${escape(nameFor('devices', connection.deviceId))}</strong><small>${escape(nameFor('gateways', connection.gatewayId))}</small></span></div></td><td>${badge(connection.status)}</td><td class="date-cell">${time(connection.startedAt)}</td><td class="date-cell">${connection.endedAt ? time(connection.endedAt) : 'In progress'}</td><td>${connection.status === 'ACTIVE' ? `<button class="button small secondary" data-action="end-connection" data-id="${connection.id}">End session</button>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll"><table class="phone-records session-records"><thead><tr><th>Device &amp; gateway</th><th>Status</th><th>Started</th><th>Ended</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${connections.map((connection) => `<tr><td><div class="table-name"><span class="table-icon">${icon('link')}</span><span><strong>${escape(nameFor('devices', connection.deviceId))}</strong><small>${escape(nameFor('gateways', connection.gatewayId))}</small></span></div></td><td>${badge(connection.status)}</td><td class="date-cell">${time(connection.startedAt)}</td><td class="date-cell">${connection.endedAt ? time(connection.endedAt) : 'In progress'}</td><td>${connection.status === 'ACTIVE' ? `<button class="button small secondary" data-action="end-connection" data-id="${connection.id}">End session</button>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function openModal(title, subtitle, content) {
+  clearTimeout(pairingWatch);
+  pairingCheck?.abort();
+  pairingTarget = null;
   modalReturnFocus = document.activeElement;
   modal.innerHTML = `<div class="modal-head"><div><h2 id="modal-title">${title}</h2><p class="muted">${subtitle}</p></div><button class="icon-button" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button></div>${content}`;
   if (!modal.open) modal.showModal();
@@ -188,9 +214,48 @@ function showCreate(kind) {
 
 function formFooter(label) { return `<p class="form-error" role="alert"></p><div class="modal-footer"><button class="button secondary" type="button" data-action="close-modal">Cancel</button><button class="button primary" type="submit">${label}${icon('arrow')}</button></div>`; }
 
+async function chooseGateway() {
+  navigate('gateways');
+  await load();
+  const available = state.gateways.filter(gateway => gateway.status !== 'REVOKED');
+  openModal('Choose your gateway', 'Select your home gateway to continue setup.', `<form id="gateway-select-form"><label>Gateway<select name="gatewayId" aria-label="Gateway" required><option value="">Choose a gateway</option>${available.map(gateway => `<option value="${escape(gateway.id)}">${escape(gateway.name)} (${gateway.status === 'PAIRED' ? 'Paired' : 'Needs pairing'})</option>`).join('')}</select></label><p class="field-help">A fresh token is generated automatically for a gateway that needs pairing. Paste it into the gateway agent on your home PC.</p>${formFooter('Continue')}</form><button class="text-button" data-action="add-gateway">Add a new gateway</button>`);
+}
+function showPairingSuccess(gateway) {
+  openModal('Gateway paired successfully', escape(gateway.name), `<div class="pairing-success"><span class="subscription-symbol">${icon('check')}</span><h3>Your gateway is paired.</h3><p>NetBridge has confirmed the gateway agent. Keep the agent running on your home PC.</p><div class="info-panel">${icon('help')} To use home internet on Android, connect Tailscale and select your home PC as the exit node. Pairing alone does not confirm internet traffic.</div></div><div class="modal-footer"><button class="button primary" data-action="finish-pairing">View gateway ${icon('arrow')}</button></div>`);
+}
+async function checkGatewayPairing(manual = false) {
+  if (!pairingTarget || !modal.open || pairingCheck) return;
+  const target = pairingTarget;
+  const controller = new AbortController();
+  pairingCheck = controller;
+  let stop = false;
+  try {
+    const response = await fetch(`/v1/gateways/${encodeURIComponent(target.id)}`, { headers: { Authorization: `Bearer ${state.token}`, Accept: 'application/json' }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
+    if (controller.signal.aborted || pairingTarget !== target) return;
+    if (!response.ok) {
+      if ([401,403,404].includes(response.status)) { stop = true; throw new Error('Cannot verify this gateway. Sign in and reopen gateway setup.'); }
+      throw new Error('Cannot reach the gateway status. Retrying...');
+    }
+    const gateway = await response.json();
+    if (gateway.status === 'PAIRED') { showPairingSuccess(gateway); return; }
+    if (gateway.status === 'REVOKED') { stop = true; throw new Error('This gateway was revoked. Choose another gateway.'); }
+    if (Date.now() >= target.expires) { stop = true; throw new Error('Token expired. Close this window and select the gateway again for a new token.'); }
+    document.querySelector('#pairing-status').textContent = manual ? 'Still waiting. Paste the token into the gateway agent on your home PC.' : 'Waiting for your gateway agent...';
+  } catch (error) {
+    if (!controller.signal.aborted && pairingTarget === target) {
+      const status = document.querySelector('#pairing-status');
+      if (status) status.textContent = error.message;
+    }
+  } finally {
+    if (pairingCheck === controller) pairingCheck = null;
+    if (!controller.signal.aborted && pairingTarget === target && modal.open && !stop) pairingWatch = setTimeout(() => checkGatewayPairing(), 3000);
+  }
+}
 function showPairing(gateway, result) {
   const expires = new Date(result.pairingExpiresAt);
-  openModal('Pair your gateway', `Connect “${escape(gateway.name)}” to its gateway agent.`, `<ol class="pairing-steps"><li><span>1</span><div><strong>Open your gateway agent</strong><p>Use the trusted agent on your home or office gateway.</p></div></li><li><span>2</span><div><strong>Transfer this one-time pairing token</strong><p>It expires at ${escape(expires.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }))}. Keep it private.</p></div></li></ol><div class="token-box"><label for="pairing-token">PAIRING TOKEN</label><div><input id="pairing-token" readonly value="${escape(result.pairingToken)}" aria-label="Pairing token"><button class="icon-button" data-action="copy-token" aria-label="Copy pairing token">${icon('copy')}</button></div></div><div class="info-panel">${icon('shield')} The agent consumes the token at <code>/v1/gateway-agent/pair</code>. Pairing is complete when the gateway status changes to Paired.</div><div class="modal-footer"><button class="button primary" data-action="check-pairing">Done, check status ${icon('refresh')}</button></div>`);
+  openModal('Pair your gateway', `Connect "${escape(gateway.name)}" to its gateway agent.`, `<ol class="pairing-steps"><li><span>1</span><div><strong>Open your gateway agent</strong><p>On your home PC, run <code>npm run gateway:pair</code>.</p></div></li><li><span>2</span><div><strong>Paste the generated token</strong><p>Paste the token into the agent, then run <code>npm run gateway:start</code>. It expires at ${escape(expires.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }))}.</p></div></li><li><span>3</span><div><strong>Wait for confirmation</strong><p>This screen updates automatically when the agent pairs.</p></div></li></ol><div class="token-box"><label for="pairing-token">PAIRING TOKEN</label><div><input id="pairing-token" readonly value="${escape(result.pairingToken)}" aria-label="Pairing token"><button class="icon-button" data-action="copy-token" aria-label="Copy pairing token">${icon('copy')}</button></div></div><p id="pairing-status" class="pairing-status" role="status">Waiting for your gateway agent...</p><div class="info-panel">${icon('shield')} Keep the token private. Pairing confirms your gateway agent; Android internet access also needs the Tailscale connection.</div><div class="modal-footer"><button class="button primary" data-action="check-pairing">Done, check status ${icon('refresh')}</button></div>`);
+  pairingTarget = { id: gateway.id, expires: expires.getTime() };
+  pairingWatch = setTimeout(() => checkGatewayPairing(), 1000);
 }
 
 function confirmAction(action, id) {
@@ -202,7 +267,7 @@ function confirmAction(action, id) {
 }
 
 function guide() {
-  openModal('A small bridge. A good beginning.', 'Get your workspace ready in three simple steps.', `<ol class="pairing-steps guide-steps"><li><span>1</span><div><strong>Add and pair a gateway</strong><p>Name your home or office gateway. Privately transfer its one-time pairing token to your gateway agent.</p></div></li><li><span>2</span><div><strong>Welcome your devices</strong><p>Register your phone or computer, then approve the devices you trust.</p></div></li><li><span>3</span><div><strong>Keep track of sessions</strong><p>Create and end connection records, and review them in your history.</p></div></li></ol><div class="info-panel">${icon('help')} NetBridge currently manages gateways, approvals, and session records. Traffic tunneling and gateway agent software are separate components.</div><div class="modal-footer"><button class="button primary" data-action="close-modal">Make yourself at home ${icon('arrow')}</button></div>`);
+  openModal('A small bridge. A good beginning.', 'Get your workspace ready in three simple steps.', `<ol class="pairing-steps guide-steps"><li><span>1</span><div><strong>Add and pair a gateway</strong><p>Name your home or office gateway. Privately transfer its one-time pairing token to your gateway agent.</p></div></li><li><span>2</span><div><strong>Welcome your devices</strong><p>Register your phone or computer, then approve the devices you trust.</p></div></li><li><span>3</span><div><strong>Keep track of sessions</strong><p>Create and end connection records, and review them in your history.</p></div></li></ol><div class="info-panel">${icon('help')} NetBridge currently manages gateways, approvals, and session records. Run the gateway agent on your home PC to pair it. Remote internet access also needs the Tailscale setup described in the project documentation.</div><div class="modal-footer"><button class="button primary" data-action="close-modal">Make yourself at home ${icon('arrow')}</button></div>`);
 }
 
 async function submitForm(form, work) {
@@ -253,6 +318,15 @@ document.addEventListener('submit', (event) => {
       startRefresh();
       checkHealth();
       toast('Welcome back.');
+      await verifyPendingPayment();
+    });
+  } else if (form.id === 'gateway-select-form') {
+    submitForm(form, async () => {
+      const gateway = await api(`/gateways/${encodeURIComponent(data.gatewayId)}`);
+      if (gateway.status === 'REVOKED') throw new Error('This gateway was revoked. Choose another gateway.');
+      if (gateway.status === 'PAIRED') { showPairingSuccess(gateway); return; }
+      const result = await api(`/gateways/${gateway.id}/pairing-token`, { method: 'POST' });
+      showPairing(gateway, result);
     });
   } else if (form.id === 'create-form') {
     submitForm(form, async () => {
@@ -286,6 +360,10 @@ document.addEventListener('click', async (event) => {
     if (action === 'password') { const input = document.querySelector('#password'); input.type = input.type === 'password' ? 'text' : 'password'; button.setAttribute('aria-label', input.type === 'password' ? 'Show password' : 'Hide password'); }
     if (action === 'menu') document.querySelector('#sidebar')?.classList.toggle('expanded');
     if (action === 'guide') guide();
+    if (action === 'plan-details') {
+      const plan = subscriptionPlans.find(item => item.id === button.dataset.plan);
+      if (plan) showPlanCheckout(plan);
+    }
     if (action === 'close-modal' && !state.busy) modal.close();
     if (action === 'refresh') { await Promise.all([load(), checkHealth()]); }
     if (action === 'add-gateway') showCreate('gateway');
@@ -298,7 +376,19 @@ document.addEventListener('click', async (event) => {
       try { await navigator.clipboard.writeText(input.value); toast('Pairing token copied. Keep it private.'); }
       catch { input.focus(); input.select(); toast('Select and copy the pairing token.'); }
     }
-    if (action === 'check-pairing') { modal.close(); await load(); }
+    if (action === 'check-pairing') { clearTimeout(pairingWatch); await checkGatewayPairing(true); }
+    if (action === 'choose-gateway') await chooseGateway();
+    if (action === 'pay-subscription') {
+      button.disabled = true;
+      const channel = modal.querySelector('input[name="paymentMethod"]:checked').value;
+      const result = await api('/billing/checkout', { method: 'POST', body: { plan: button.dataset.plan, channel } });
+      const checkout = new URL(result.authorizationUrl);
+      if (checkout.protocol !== 'https:' || checkout.hostname !== 'checkout.paystack.com') throw new Error('Invalid checkout address.');
+      sessionStorage.setItem('netbridge.payment', result.reference);
+      location.assign(checkout.href);
+    }
+    if (action === 'verify-payment') { paymentChecks = 0; await verifyPendingPayment(); }
+    if (action === 'finish-pairing') { modal.close(); navigate('gateways'); await load(); }
     if (action === 'pairing') {
       button.disabled = true;
       const gateway = state.gateways.find((g) => g.id === button.dataset.id);
@@ -323,11 +413,22 @@ document.addEventListener('click', async (event) => {
   finally { if (button.isConnected) button.disabled = false; }
 });
 
+document.addEventListener('change', (event) => {
+  if (event.target.name === 'paymentMethod') {
+    document.querySelector('#mpesa-payment').hidden = billingEnabled || event.target.value !== 'mpesa';
+    document.querySelector('#card-payment').hidden = event.target.value !== 'card';
+  }
+});
+
 document.addEventListener('input', (event) => {
   if (event.target.id === 'resource-search') { state.search = event.target.value; render(); }
 });
 modal.addEventListener('cancel', (event) => { if (state.busy) event.preventDefault(); });
 modal.addEventListener('close', () => {
+  if (modal.open) return; // Ignore a queued close event if the next step already reopened the dialog.
+  clearTimeout(pairingWatch);
+  pairingCheck?.abort();
+  pairingTarget = null;
   modal.innerHTML = '';
   if (modalReturnFocus?.isConnected) modalReturnFocus.focus({ preventScroll: true });
   else document.querySelector('#main')?.focus({ preventScroll: true });
@@ -350,7 +451,46 @@ window.addEventListener('hashchange', () => {
 });
 function startRefresh() { clearInterval(refreshTimer); refreshTimer = setInterval(() => { if (!document.hidden && !modal.open && !state.busy) { load({ quiet: true }); checkHealth(); } }, 60000); }
 
+async function verifyPendingPayment() {
+  const reference = sessionStorage.getItem('netbridge.payment');
+  if (!reference || !state.user || verifyingPayment) return;
+  clearTimeout(paymentWatch);
+  verifyingPayment = true;
+  const token = state.token;
+  try {
+    const result = await api(`/billing/payments/${encodeURIComponent(reference)}/verify`, { method: 'POST' });
+    if (token !== state.token) return;
+    if (result.status === 'success') {
+      sessionStorage.removeItem('netbridge.payment');
+      if (modal.open) modal.close();
+      toast('Payment confirmed. Choose your gateway.');
+      await chooseGateway();
+      return;
+    }
+    if (['failed', 'expired'].includes(result.status)) {
+      sessionStorage.removeItem('netbridge.payment');
+      openModal(result.status === 'failed' ? 'Payment not completed' : 'Subscription expired', 'Choose a subscription to continue.', '<div class="modal-footer"><button class="button primary" data-action="close-modal">Back to overview</button></div>');
+      return;
+    }
+    openModal('Waiting for payment', 'Complete payment on Paystack. Your gateway setup opens after confirmation.', '<p class="payment-help">We are checking your payment. Do not pay again while it is pending.</p><div class="modal-footer"><button class="button primary" data-action="verify-payment">Check payment status</button></div>');
+    if (++paymentChecks < 36) paymentWatch = setTimeout(verifyPendingPayment, 5000);
+  } catch (error) {
+    if (token === state.token) openModal('Payment confirmation unavailable', 'No connection has been activated. Check the payment before trying to pay again.', `<p class="payment-help">${escape(error.message)}</p><div class="modal-footer"><button class="button primary" data-action="verify-payment">Check payment status</button></div>`);
+  } finally { verifyingPayment = false; }
+}
 async function boot() {
+  const returned = new URL(location.href);
+  const reference = returned.searchParams.get('reference') || returned.searchParams.get('trxref');
+  if (reference && /^nb_[a-f0-9]{32}$/.test(reference)) {
+    sessionStorage.setItem('netbridge.payment', reference);
+    returned.searchParams.delete('reference'); returned.searchParams.delete('trxref');
+    history.replaceState(null, '', returned.pathname + returned.search + returned.hash);
+  }
+  try {
+    const response = await fetch('/v1/billing/config', { signal: AbortSignal.timeout(10000) });
+    if (response.ok) billingEnabled = (await response.json()).enabled === true;
+  } catch { billingEnabled = false; }
+
   if (state.token) {
     try { state.user = await api('/auth/me'); }
     catch (error) {
@@ -358,7 +498,7 @@ async function boot() {
     }
   }
   navigate(location.hash.slice(1));
-  if (state.user) { await load(); startRefresh(); }
+  if (state.user) { await load(); startRefresh(); await verifyPendingPayment(); }
   checkHealth();
 }
 boot();

@@ -2,17 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#087f68">
     <meta name="description" content="Your private network, within reach. Manage your NetBridge gateways, approved devices, and connection history.">
     <title>NetBridge — Your network, within reach</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/app.js"></script>
+    <script type="module" src="/pwa.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <div id="app"><main id="main" class="boot"><div class="brand-mark">N</div><p>Opening your workspace…</p></main></div>
+    <button id="install-app" class="button primary install-app" hidden>Install NetBridge</button>
     <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
     <dialog id="modal" aria-labelledby="modal-title"></dialog>
   </body>
