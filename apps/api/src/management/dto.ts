@@ -29,6 +29,29 @@ export class CredentialsDto {
   password!: string;
 }
 
+export class RegisterDto extends CredentialsDto {
+  @ApiPropertyOptional({ maxLength: 80 })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @Length(1, 80)
+  firstName?: string;
+
+  @ApiPropertyOptional({ maxLength: 80 })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @Length(1, 80)
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: '+254 712 345 678' })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @Matches(/^[+0-9() .-]{7,30}$/)
+  contact?: string;
+}
+
 export class NameDto {
   @ApiProperty({ example: 'Home gateway', minLength: 1, maxLength: 80 })
   @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)

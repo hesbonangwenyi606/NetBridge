@@ -27,6 +27,9 @@ enum ConnectionStatus {
 model User {
   id           String        @id @default(uuid()) @db.Uuid
   email        String        @unique @db.VarChar(254)
+  firstName    String?       @db.VarChar(80)
+  lastName     String?       @db.VarChar(80)
+  contact      String?       @db.VarChar(30)
   passwordHash String
   createdAt    DateTime      @default(now())
   sessions     AuthSession[]

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Q
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard, bearerToken, CurrentUser, Principal } from './auth.guard';
 import { AuthService } from './auth.service';
-import { ConnectionDto, CredentialsDto, DeviceDto, ListDto, NameDto, PairGatewayDto } from './dto';
+import { ConnectionDto, CredentialsDto, RegisterDto, DeviceDto, ListDto, NameDto, PairGatewayDto } from './dto';
 import { ManagementService } from './management.service';
 import { RateLimitGuard } from './rate-limit.guard';
 
@@ -13,7 +13,7 @@ export class AuthController {
 
   @Post('register')
   @UseGuards(RateLimitGuard)
-  register(@Body() dto: CredentialsDto) { return this.auth.register(dto); }
+  register(@Body() dto: RegisterDto) { return this.auth.register(dto); }
 
   @Post('login')
   @HttpCode(200)
@@ -30,6 +30,18 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard)
   logout(@CurrentUser() user: Principal) { return this.auth.logout(user.sessionId); }
+}
+
+@ApiTags('dashboard')
+@ApiBearerAuth()
+@UseGuards(AuthGuard)
+@Controller('dashboard')
+export class DashboardController {
+  constructor(private readonly management: ManagementService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Get account-wide resource counts for the dashboard' })
+  get(@CurrentUser() user: Principal) { return this.management.dashboard(user.userId); }
 }
 
 @ApiTags('gateway-agent')

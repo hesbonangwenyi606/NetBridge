@@ -8,6 +8,50 @@ gateway pairing and heartbeats, device approval/revocation, and connection-sessi
 records. It uses NestJS, Prisma, and PostgreSQL. Routes are versioned under `/v1`;
 interactive OpenAPI documentation is available at `/docs`.
 
+The web workspace in `apps/web` provides account registration and sign-in, an
+overview dashboard, gateway pairing tokens, device approval/revocation, and
+connection-session history. It uses the real API through a same-origin server
+proxy, so browser requests do not require broad CORS permissions. There is no
+demo data. Authentication is kept in per-tab session storage and cleared by logout.
+
+## Frontend
+
+With the API running, open a second terminal:
+
+```powershell
+npm.cmd run web:dev
+```
+
+Open `http://127.0.0.1:5173`. The web server proxies `/v1` to
+`http://127.0.0.1:3000`; set `API_URL` to another trusted API origin if needed.
+Set `WEB_PORT` or `WEB_HOST` to change the frontend listener. Register your own
+account to begin. Pairing tokens must be transferred privately to your gateway
+agent; the frontend does not impersonate an agent or establish a traffic tunnel.
+
+For a production build, run `npm run web:build` followed by `npm run web:start`.
+`docker compose up --build -d` builds and starts PostgreSQL, migrations, the API,
+and the web UI. The `web` Docker target runs the frontend as a non-root user at
+port 5173 and proxies requests to the API over the private Compose network.
+
+Frontend checks:
+
+```powershell
+npm.cmd run web:test
+npm.cmd run test:e2e
+```
+
+The browser test uses disposable embedded PostgreSQL and a separate API process.
+Set `NETBRIDGE_TEST_DATABASE_URL` to test with real PostgreSQL instead (as CI does);
+the test creates and removes its own randomly named schema, keeping existing data
+untouched. On memory-constrained machines, prefer real PostgreSQL. On Windows it uses installed Edge
+(override `PLAYWRIGHT_CHANNEL` with `chrome` if preferred). On Linux, run
+`npx playwright install --with-deps chromium` first. The test exercises account
+creation, gateway pairing through the agent API, device approval/revocation,
+session history, logout/login, session restoration, and mobile navigation.
+The test uses a one-connection pool to match the embedded engine. Normal API
+instances default to ten connections; set `DATABASE_POOL_MAX` (1–100) to tune this
+for your deployment.
+
 Connection records track management state. They do not establish tunnels or
 prove traffic is flowing. Android/Linux tunnel clients, relay infrastructure,
 payments, email verification, and password recovery are outside this MVP.

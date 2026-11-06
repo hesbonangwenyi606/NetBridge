@@ -22,6 +22,16 @@ function page<T extends { id: string }>(items: T[], limit: number) {
 export class ManagementService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async dashboard(ownerId: string) {
+    const [pairedGateways, approvedDevices, activeConnections, pendingDevices] = await this.prisma.$transaction([
+      this.prisma.gateway.count({ where: { ownerId, status: 'PAIRED' } }),
+      this.prisma.device.count({ where: { ownerId, status: 'APPROVED' } }),
+      this.prisma.connection.count({ where: { device: { ownerId }, status: 'ACTIVE' } }),
+      this.prisma.device.count({ where: { ownerId, status: 'PENDING' } }),
+    ], { isolationLevel: 'RepeatableRead' });
+    return { pairedGateways, approvedDevices, activeConnections, pendingDevices };
+  }
+
   // Serialize approval/revocation against session creation; retry PostgreSQL serialization conflicts.
   private async atomic<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {

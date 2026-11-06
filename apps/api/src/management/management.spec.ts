@@ -119,6 +119,9 @@ test('MVP management lifecycle with PostgreSQL persistence', async (t) => {
     assert.equal(me.body.id, ownerId);
     assert.equal(me.body.passwordHash, undefined);
     assert.equal(me.headers['cache-control'], 'no-store');
+    await http().get('/v1/dashboard').expect(401);
+    const summary = await http().get('/v1/dashboard').auth(ownerToken, { type: 'bearer' }).expect(200);
+    assert.deepEqual(summary.body, { pairedGateways: 0, approvedDevices: 0, activeConnections: 0, pendingDevices: 0 });
   });
 
   await t.test('gateway pairing expires, rotates, is single-use, and keeps secrets out of lists', async () => {
@@ -154,6 +157,10 @@ test('MVP management lifecycle with PostgreSQL persistence', async (t) => {
     const created = await http().post('/v1/devices').auth(ownerToken, { type: 'bearer' }).send({ name: 'Phone', platform: 'android' }).expect(201);
     deviceId = created.body.id;
     assert.equal(created.body.status, 'PENDING');
+    assert.deepEqual((await http().get('/v1/dashboard').auth(ownerToken, { type: 'bearer' }).expect(200)).body,
+      { pairedGateways: 1, approvedDevices: 0, activeConnections: 0, pendingDevices: 1 });
+    assert.deepEqual((await http().get('/v1/dashboard').auth(otherToken, { type: 'bearer' }).expect(200)).body,
+      { pairedGateways: 0, approvedDevices: 0, activeConnections: 0, pendingDevices: 0 });
     await http().get(`/v1/devices/${deviceId}`).auth(otherToken, { type: 'bearer' }).expect(404);
     await http().post(`/v1/devices/${deviceId}/approve`).auth(otherToken, { type: 'bearer' }).expect(404);
     await http().post(`/v1/devices/${deviceId}/revoke`).auth(otherToken, { type: 'bearer' }).expect(404);

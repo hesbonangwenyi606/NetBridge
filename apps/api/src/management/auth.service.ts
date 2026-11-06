@@ -1,20 +1,20 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CredentialsDto } from './dto';
+import { CredentialsDto, RegisterDto } from './dto';
 import { hashPassword, newToken, tokenHash, verifyPassword } from './security';
 
-const publicUser = { id: true, email: true, createdAt: true } as const;
+const publicUser = { id: true, email: true, firstName: true, lastName: true, contact: true, createdAt: true } as const;
 
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async register(dto: CredentialsDto) {
+  async register(dto: RegisterDto) {
     const passwordHash = await hashPassword(dto.password);
     try {
       return await this.prisma.user.create({
-        data: { email: dto.email, passwordHash }, select: publicUser,
+        data: { email: dto.email, passwordHash, firstName: dto.firstName, lastName: dto.lastName, contact: dto.contact }, select: publicUser,
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

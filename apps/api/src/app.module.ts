@@ -15,6 +15,7 @@ import { ManagementModule } from './management/management.module';
           .default('development'),
         HOST: Joi.string().trim().min(1).default('127.0.0.1'),
         PORT: Joi.number().port().default(3000),
+        DATABASE_POOL_MAX: Joi.number().integer().min(1).max(100).default(10),
         DATABASE_URL: Joi.string()
           .uri({ scheme: ['postgres', 'postgresql'] })
           .required(),

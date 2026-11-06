@@ -15,9 +15,18 @@ Resource IDs must be UUIDs.
 | POST | `/auth/logout` | Account bearer token | 204: current token revoked |
 
 Register/login body: `{ "email": "owner@example.com", "password": "a long unique password" }`.
+Registration also accepts optional `firstName`, `lastName` (1?80 characters each),
+and `contact` (7?30 characters using digits, spaces, +, parentheses, dots, or hyphens).
+These profile fields are returned with the public account and `/auth/me`.
+The web form collects a full name, contact number, and matching password confirmation,
+then returns to sign-in with the email prefilled.
 Registration does not log you in. Send `Authorization: Bearer <accessToken>`
 on protected routes. Tokens expire after 24 hours; log in again to renew.
 Logout affects only the current session.
+
+`GET /dashboard` requires an account bearer token and returns account-wide counts:
+`pairedGateways`, `approvedDevices`, `activeConnections`, and `pendingDevices`.
+These counts are independent of resource-list pagination.
 
 ## Gateways
 
