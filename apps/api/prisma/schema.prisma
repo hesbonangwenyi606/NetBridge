@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GatewayStatus {
+  PENDING
+  PAIRED
+  REVOKED
+}
+
+enum DeviceStatus {
+  PENDING
+  APPROVED
+  REVOKED
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  ENDED
+}
+
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  email        String        @unique @db.VarChar(254)
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  sessions     AuthSession[]
+  gateways     Gateway[]
+  devices      Device[]
+}
+
+model AuthSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Gateway {
+  id                   String        @id @default(uuid()) @db.Uuid
+  ownerId              String        @db.Uuid
+  owner                User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name                 String        @db.VarChar(80)
+  status               GatewayStatus @default(PENDING)
+  pairingTokenHash     String?       @unique
+  pairingExpiresAt     DateTime?
+  credentialHash       String?       @unique
+  pairedAt             DateTime?
+  lastSeenAt           DateTime?
+  createdAt            DateTime      @default(now())
+  connections          Connection[]
+
+  @@index([ownerId, createdAt])
+}
+
+model Device {
+  id          String       @id @default(uuid()) @db.Uuid
+  ownerId     String       @db.Uuid
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String       @db.VarChar(80)
+  platform    String       @db.VarChar(20)
+  status      DeviceStatus @default(PENDING)
+  approvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  connections Connection[]
+
+  @@index([ownerId, createdAt])
+}
+
+model Connection {
+  id        String           @id @default(uuid()) @db.Uuid
+  gatewayId String           @db.Uuid
+  gateway   Gateway          @relation(fields: [gatewayId], references: [id], onDelete: Cascade)
+  deviceId  String           @db.Uuid
+  device    Device           @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  status    ConnectionStatus @default(ACTIVE)
+  startedAt DateTime         @default(now())
+  endedAt   DateTime?
+
+  @@index([gatewayId, startedAt])
+  @@index([deviceId, startedAt])
+}

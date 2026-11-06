@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.test-build/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+apps/api/generated/
+
+/generated/prisma

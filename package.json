@@ -1,0 +1,25 @@
+{
+  "name": "netbridge",
+  "private": true,
+  "workspaces": [
+    "apps/api"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @netbridge/api",
+    "start:dev": "npm run start:dev --workspace @netbridge/api",
+    "start": "npm run start --workspace @netbridge/api",
+    "test": "npm run test --workspace @netbridge/api",
+    "verify:deployment": "npm run verify:deployment --workspace @netbridge/api",
+    "db:generate": "npm run prisma:generate --workspace @netbridge/api",
+    "db:validate": "npm run prisma:validate --workspace @netbridge/api",
+    "db:migrate": "npm run db:migrate --workspace @netbridge/api",
+    "db:deploy": "npm run db:deploy --workspace @netbridge/api",
+    "db:studio": "npm run db:studio --workspace @netbridge/api"
+  },
+  "devDependencies": {
+    "@nestjs/platform-express": "^12.3.3"
+  },
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  }
+}
